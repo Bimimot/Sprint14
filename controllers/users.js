@@ -1,4 +1,7 @@
+const bcrypt = require('bcryptjs'); // импорт модуля для создания хешей
+const jwt = require('jsonwebtoken'); // импорт модуля для создания токенов
 const User = require('../models/user');
+const { cryptoKey } = require('../key'); // импорт ключа для зашифровки токена
 
 // поиск всех пользователей
 module.exports.getUsers = (req, res) => {
@@ -27,14 +30,33 @@ module.exports.getUserById = (req, res) => {
 };
 
 // создание пользователя
-module.exports.postUser = (req, res) => {
-  const { name, about, avatar } = req.body;
-  User.create({ name, about, avatar })
-    .then((user) => res.send({ data: user }))
-    .catch((err) => res.status(500).send({ message: err.message }));
+module.exports.createUser = (req, res) => {
+  const {
+    name, about, avatar, email, password,
+  } = req.body;
+  bcrypt.hash(password, 5)
+    .then((hash) => User.create({
+      name, about, avatar, email, password: hash,
+    }))
+    .then((user) => res.send({
+      _id: user._id, name: user.name, about: user.about, avatar: user.avatar, email: user.email,
+    }))
+    .catch((err) => {
+      if (err.name === 'CastError' || err.name === 'ValidationError') {
+        res.status(400).send({ message: 'Данные пользователя заданы в неверном формате' });
+      } else
+      if (err.code === 11000) {
+        res.status(409).send({ message: 'Пользователь с таким email уже существует' });
+      } else {
+        res.status(500).send({ message: err.name });
+      }
+    });
 };
 
+// err.code = 11000
+
 // обновление данных пользователя
+// user._id получаем из токена после прохождения авторизации
 module.exports.patchUser = (req, res) => {
   const { name, about } = req.body;
   User.findByIdAndUpdate(req.user._id, { name, about },
@@ -59,6 +81,7 @@ module.exports.patchUser = (req, res) => {
 };
 
 // обновление аватара пользователя
+// user._id получаем из токена после прохождения авторизации
 module.exports.patchUserAvatar = (req, res) => {
   User.findByIdAndUpdate(req.user._id, { avatar: req.body.avatar },
     {
@@ -78,5 +101,21 @@ module.exports.patchUserAvatar = (req, res) => {
       } else {
         res.status(500).send({ message: err.name });
       }
+    });
+};
+
+// авторизация пользователя
+module.exports.login = (req, res) => {
+  const { email, password } = req.body;
+
+  return User.findUserByCredentials(email, password)
+    .then((user) => {
+      const token = jwt.sign({ _id: user._id }, cryptoKey, { expiresIn: '7d' }); // создали токен
+      res.send({ token });
+    })
+    .catch((err) => {
+      res
+        .status(401)
+        .send({ message: err.message });
     });
 };

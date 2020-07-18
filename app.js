@@ -15,17 +15,15 @@ mongoose.connect('mongodb://localhost:27017/mestodb', {
 const cardsRouter = require('./routes/cards.js'); // импортируем роутер для карточек
 const usersRouter = require('./routes/users.js'); // импортируем роутер для данных о пользователях
 
-app.use(bodyParser.json()); // для собирания JSON-формата
+const { createUser, login } = require('./controllers/users'); // импорт методов авторизации из контроллера
 
-app.use((req, res, next) => { // хардкод для добавления id пользователя
-  req.user = {
-    _id: '5ef874ea83381c263860784e',
-  };
-  next();
-});
+app.use(bodyParser.json()); // для сборки JSON-формата
 
 app.use('/users', usersRouter); // подключаем usersRouter
 app.use('/cards', cardsRouter); // подключаем cardsRoute
+
+app.post('/signin', login);
+app.post('/signup', createUser);
 
 app.use((req, res) => { // если запрос на несуществующую страницу
   res.status(404).send({ message: 'Запрашиваемый ресурс не найден' });
